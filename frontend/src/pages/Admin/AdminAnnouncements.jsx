@@ -1,0 +1,199 @@
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import ConfirmModal from '../../components/ConfirmModal';
+
+const Icon = ({ path, size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    {path}
+  </svg>
+);
+
+const ICONS = {
+  megaphone: <><path d="M6 7h3l5-4v18l-5-4H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /></>,
+  trash: <><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></>
+};
+
+const AdminAnnouncements = () => {
+  const [announcements, setAnnouncements] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isAdding, setIsAdding] = useState(false);
+  const [newAnnouncement, setNewAnnouncement] = useState({
+    title: '',
+    content: '',
+    type: 'info'
+  });
+  const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null });
+  
+  const admin = JSON.parse(localStorage.getItem('resumify_admin') || '{}');
+
+  useEffect(() => {
+    fetchAnnouncements();
+  }, []);
+
+  const fetchAnnouncements = async () => {
+    try {
+      const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/admin/announcements`);
+      setAnnouncements(res.data);
+    } catch (err) {
+      console.error('Failed to fetch announcements', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${import.meta.env.VITE_API_URL}/api/admin/announcements`, {
+        ...newAnnouncement,
+        is_active: true
+      });
+      setNewAnnouncement({ title: '', content: '', type: 'info' });
+      setIsAdding(false);
+      fetchAnnouncements();
+    } catch (err) {
+      alert('Failed to post announcement');
+    }
+  };
+
+  const handleDelete = (id) => {
+    setConfirmDelete({ isOpen: true, id });
+  };
+
+  const confirmDeleteAnnouncement = async () => {
+    const { id } = confirmDelete;
+    setConfirmDelete({ isOpen: false, id: null });
+    try {
+      await axios.delete(`${import.meta.env.VITE_API_URL}/api/admin/announcements/${id}`);
+      fetchAnnouncements();
+    } catch (err) {
+      alert('Failed to delete announcement');
+    }
+  };
+
+  if (loading) return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading Announcements...</div>;
+
+  return (
+    <div style={{ maxWidth: '900px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <div>
+          <h2 style={{ fontSize: '1.75rem', marginBottom: '0.25rem' }}>Global Announcements</h2>
+          <p style={{ color: 'var(--text-muted)' }}>Broadcast alerts and updates to all registered users.</p>
+        </div>
+        <button className="btn btn-primary" onClick={() => setIsAdding(!isAdding)}>
+          {isAdding ? 'Cancel' : '+ New Announcement'}
+        </button>
+      </div>
+
+      {isAdding && (
+        <div className="card" style={{ marginBottom: '2rem' }}>
+          <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <div className="form-group">
+              <label className="form-label">Headline</label>
+              <input 
+                type="text" 
+                className="form-input" 
+                value={newAnnouncement.title} 
+                onChange={(e) => setNewAnnouncement({ ...newAnnouncement, title: e.target.value })} 
+                required 
+                placeholder="e.g., Scheduled Maintenance"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Message Content</label>
+              <textarea 
+                className="form-input" 
+                style={{ resize: 'vertical', minHeight: '100px' }} 
+                value={newAnnouncement.content} 
+                onChange={(e) => setNewAnnouncement({ ...newAnnouncement, content: e.target.value })} 
+                required 
+                placeholder="Detailed message..."
+              />
+            </div>
+            <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '1rem' }}>
+              <label className="form-label" style={{ marginBottom: 0 }}>Alert Type</label>
+              <select 
+                className="form-input" 
+                style={{ width: 'auto' }} 
+                value={newAnnouncement.type} 
+                onChange={(e) => setNewAnnouncement({ ...newAnnouncement, type: e.target.value })}
+              >
+                <option value="info">Informational (Blue)</option>
+                <option value="warning">Warning (Yellow)</option>
+                <option value="success">Success / Promo (Green)</option>
+                <option value="danger">Critical (Red)</option>
+              </select>
+            </div>
+            <button type="submit" className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>Post Announcement</button>
+          </form>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        {announcements.map((a) => (
+          <div key={a.id} className="card announcement-card" style={{ padding: '1.5rem', display: 'flex', gap: '1.5rem', alignItems: 'flex-start', borderLeft: `4px solid var(--${a.type === 'danger' ? 'error' : a.type === 'warning' ? 'warning' : a.type === 'success' ? 'success' : 'primary'})`, background: 'var(--surface)' }}>
+            <div className="announcement-icon-container" style={{ 
+              width: '52px', height: '52px', borderRadius: '18px', 
+              background: `linear-gradient(135deg, var(--surface), var(--surface-hover))`, 
+              boxShadow: '0 8px 16px -4px rgba(0,0,0,0.1)',
+              color: `var(--${a.type === 'danger' ? 'error' : a.type === 'warning' ? 'warning' : a.type === 'success' ? 'success' : 'primary'})`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              border: `1px solid var(--surface-border)`,
+              transition: 'transform 0.3s ease'
+            }}>
+              <Icon path={ICONS.megaphone} size={24} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                <h3 style={{ fontSize: '1.1rem', margin: 0 }}>{a.title}</h3>
+                <button 
+                  className="btn btn-danger" 
+                  style={{ padding: '0.4rem', background: 'transparent', color: '#ef4444', border: 'none', cursor: 'pointer' }} 
+                  onClick={() => handleDelete(a.id)}
+                  title="Delete Announcement"
+                >
+                  <Icon path={ICONS.trash} size={16} />
+                </button>
+              </div>
+              <p style={{ color: 'var(--text-main)', fontSize: '0.9rem', lineHeight: 1.5, marginBottom: '1rem' }}>
+                {a.content}
+              </p>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Posted on {new Date(a.created_at).toLocaleString()}
+              </div>
+            </div>
+          </div>
+        ))}
+        {announcements.length === 0 && !isAdding && (
+          <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+            No active announcements.
+          </div>
+        )}
+      </div>
+      <ConfirmModal 
+        isOpen={confirmDelete.isOpen}
+        onClose={() => setConfirmDelete({ isOpen: false, id: null })}
+        onConfirm={confirmDeleteAnnouncement}
+        title="Delete Announcement"
+        message="Delete this announcement permanently? This action cannot be undone."
+        confirmText="Yes, Delete"
+        type="danger"
+      />
+      <style>{`
+        .announcement-card {
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .announcement-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 12px 24px -8px rgba(0,0,0,0.15);
+        }
+        .announcement-card:hover .announcement-icon-container {
+          transform: rotate(-10deg) scale(1.1);
+          color: var(--primary);
+        }
+      `}</style>
+    </div>
+  );
+};
+
+export default AdminAnnouncements;
